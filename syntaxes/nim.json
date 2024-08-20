@@ -1,7 +1,5 @@
 {
-  "fileTypes": [
-    "nim"
-  ],
+  "fileTypes": ["nim"],
   "keyEquivalent": "^~N",
   "name": "Nim",
   "patterns": [

@@ -3,38 +3,75 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  *--------------------------------------------------------*/
 
-'use strict';
+"use strict";
 
-import vscode = require('vscode');
-import { getDirtyFile, getProjectFileInfo } from './nimUtils';
-import { execNimSuggest, NimSuggestType, NimSuggestResult } from './nimSuggestExec';
-import { getImports } from './nimImports';
+import vscode = require("coc.nvim");
+import { Thenable } from "coc.nvim";
+import { getImports } from "./nimImports";
+import {
+  NimSuggestResult,
+  NimSuggestType,
+  execNimSuggest,
+} from "./nimSuggestExec";
+import { getDirtyFile, getProjectFileInfo } from "./nimUtils";
 
-export class NimCompletionItemProvider implements vscode.CompletionItemProvider {
-  public provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.CompletionItem[]> {
+export class NimCompletionItemProvider
+  implements vscode.CompletionItemProvider
+{
+  public provideCompletionItems(
+    textDocument: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken,
+  ): Thenable<vscode.CompletionItem[]> {
     return new Promise<vscode.CompletionItem[]>((resolve, reject) => {
-      var filename = document.fileName;
+      const document = vscode.workspace.getDocument(textDocument.uri);
+      var filename = vscode.Uri.parse(document.uri).fsPath;
       let range = document.getWordRangeAtPosition(position);
-      let txt = range ? document.getText(range).toLowerCase() : undefined;
-      let line = document.lineAt(position).text;
-      if (line.startsWith('import ')) {
-        let txtPart = txt && range ? document.getText(range.with({end: position})).toLowerCase() : undefined;
-        resolve(getImports(txtPart, getProjectFileInfo(filename).wsFolder.uri.fsPath));
+      let txt = range
+        ? document.textDocument.getText(range).toLowerCase()
+        : undefined;
+      let line = document.textDocument.lineAt(position).text;
+      if (line.startsWith("import ")) {
+        let txtPart =
+          txt && range
+            ? document.textDocument
+                .getText({ ...range, end: position })
+                .toLowerCase()
+            : undefined;
+        resolve(
+          getImports(
+            txtPart,
+            vscode.Uri.parse(getProjectFileInfo(filename).wsFolder.uri).fsPath,
+          ),
+        );
       } else {
-        execNimSuggest(NimSuggestType.sug, filename, (position.line + 1), position.character, getDirtyFile(document))
-          .then(items => {
+        execNimSuggest(
+          NimSuggestType.sug,
+          filename,
+          position.line + 1,
+          position.character,
+          getDirtyFile(document.textDocument),
+        )
+          .then((items) => {
             var suggestions: vscode.CompletionItem[] = [];
             if (items) {
-              items.forEach(item => {
-                if (item.answerType === 'sug'
-                    &&  (!txt || item.symbolName.toLowerCase().indexOf(txt) >= 0)
-                    && /[a-z]/i.test(item.symbolName)) {
-                  var suggestion = new vscode.CompletionItem(item.symbolName);
+              items.forEach((item) => {
+                if (
+                  item.answerType === "sug" &&
+                  (!txt || item.symbolName.toLowerCase().indexOf(txt) >= 0) &&
+                  /[a-z]/i.test(item.symbolName)
+                ) {
+                  var suggestion: vscode.CompletionItem = {
+                    label: item.symbolName,
+                  };
                   suggestion.kind = vscodeKindFromNimSym(item.suggest);
                   suggestion.detail = nimSymDetails(item);
-                  suggestion.sortText = ('0000' + suggestions.length).slice(-4);
+                  suggestion.sortText = ("0000" + suggestions.length).slice(-4);
                   // use predefined text to disable suggest sorting
-                  suggestion.documentation = new vscode.MarkdownString(item.documentation);
+                  suggestion.documentation = {
+                    kind: "markdown",
+                    value: item.documentation,
+                  };
                   suggestions.push(suggestion);
                 }
               });
@@ -44,7 +81,8 @@ export class NimCompletionItemProvider implements vscode.CompletionItemProvider 
             } else {
               reject();
             }
-          }).catch(reason => reject(reason));
+          })
+          .catch((reason) => reject(reason));
       }
     });
   }
@@ -52,35 +90,35 @@ export class NimCompletionItemProvider implements vscode.CompletionItemProvider 
 
 function vscodeKindFromNimSym(kind: string): vscode.CompletionItemKind {
   switch (kind) {
-    case 'skConst':
+    case "skConst":
       return vscode.CompletionItemKind.Value;
-    case 'skEnumField':
+    case "skEnumField":
       return vscode.CompletionItemKind.Enum;
-    case 'skForVar':
+    case "skForVar":
       return vscode.CompletionItemKind.Variable;
-    case 'skIterator':
+    case "skIterator":
       return vscode.CompletionItemKind.Keyword;
-    case 'skLabel':
+    case "skLabel":
       return vscode.CompletionItemKind.Keyword;
-    case 'skLet':
+    case "skLet":
       return vscode.CompletionItemKind.Value;
-    case 'skMacro':
+    case "skMacro":
       return vscode.CompletionItemKind.Snippet;
-    case 'skMethod':
+    case "skMethod":
       return vscode.CompletionItemKind.Method;
-    case 'skParam':
+    case "skParam":
       return vscode.CompletionItemKind.Variable;
-    case 'skProc':
+    case "skProc":
       return vscode.CompletionItemKind.Function;
-    case 'skResult':
+    case "skResult":
       return vscode.CompletionItemKind.Value;
-    case 'skTemplate':
+    case "skTemplate":
       return vscode.CompletionItemKind.Snippet;
-    case 'skType':
+    case "skType":
       return vscode.CompletionItemKind.Class;
-    case 'skVar':
+    case "skVar":
       return vscode.CompletionItemKind.Field;
-    case 'skFunc':
+    case "skFunc":
       return vscode.CompletionItemKind.Function;
   }
   return vscode.CompletionItemKind.Property;
@@ -88,34 +126,34 @@ function vscodeKindFromNimSym(kind: string): vscode.CompletionItemKind {
 
 function nimSymDetails(suggest: NimSuggestResult): string {
   switch (suggest.suggest) {
-    case 'skConst':
-      return 'const ' + suggest.fullName + ': ' + suggest.type;
-    case 'skEnumField':
-      return 'enum ' + suggest.type;
-    case 'skForVar':
-      return 'for var of ' + suggest.type;
-    case 'skIterator':
+    case "skConst":
+      return "const " + suggest.fullName + ": " + suggest.type;
+    case "skEnumField":
+      return "enum " + suggest.type;
+    case "skForVar":
+      return "for var of " + suggest.type;
+    case "skIterator":
       return suggest.type;
-    case 'skLabel':
-      return 'label';
-    case 'skLet':
-      return 'let of ' + suggest.type;
-    case 'skMacro':
-      return 'macro';
-    case 'skMethod':
+    case "skLabel":
+      return "label";
+    case "skLet":
+      return "let of " + suggest.type;
+    case "skMacro":
+      return "macro";
+    case "skMethod":
       return suggest.type;
-    case 'skParam':
-      return 'param';
-    case 'skProc':
+    case "skParam":
+      return "param";
+    case "skProc":
       return suggest.type;
-    case 'skResult':
-      return 'result';
-    case 'skTemplate':
+    case "skResult":
+      return "result";
+    case "skTemplate":
       return suggest.type;
-    case 'skType':
-      return 'type ' + suggest.fullName;
-    case 'skVar':
-      return 'var of ' + suggest.type;
+    case "skType":
+      return "type " + suggest.fullName;
+    case "skVar":
+      return "var of " + suggest.type;
   }
   return suggest.type;
 }

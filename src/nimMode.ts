@@ -3,8 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  *--------------------------------------------------------*/
 
-'use strict';
+"use strict";
 
-import vscode = require('vscode');
+import vscode = require("coc.nvim");
 
-export const NIM_MODE: vscode.DocumentFilter = { language: 'nim', scheme: 'file' };
+export const NIM_MODE: vscode.DocumentFilter = {
+  language: "nim",
+  scheme: "file",
+};
